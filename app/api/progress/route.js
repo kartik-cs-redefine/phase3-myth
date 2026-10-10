@@ -9,9 +9,12 @@ export async function GET() {
   if (!configured) return NextResponse.json({ configured: false, records: [] });
   try {
     const response = await fetch(`${url}/rest/v1/progress?select=participant,day,vocab,speech,updated_at`, { headers: headers(), cache: 'no-store' });
-    if (!response.ok) throw new Error('Supabase read failed');
+    if (!response.ok) {
+      const errorText = await response.text();
+      return NextResponse.json({ configured: true, records: [], error: errorText, status: response.status }, { status: 500 });
+    }
     return NextResponse.json({ configured: true, records: await response.json() });
-  } catch { return NextResponse.json({ configured: true, records: [], error: 'Database unavailable' }, { status: 503 }); }
+  } catch (err) { return NextResponse.json({ configured: true, records: [], error: err.message }, { status: 503 }); }
 }
 
 export async function PUT(request) {
