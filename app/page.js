@@ -92,17 +92,23 @@ export default function Home() {
       let fallback = JSON.parse(localStorage.getItem(K) || "null") || initial();
       try {
         let d = await (await fetch("/api/progress")).json();
-        if (d.configured && d.records?.length) {
-          let n = initial();
-          d.records.forEach(
-            (r) =>
-              n[r.participant] &&
-              n[r.participant][r.day] &&
-              (n[r.participant][r.day] = { vocab: r.vocab, speech: r.speech }),
-          );
-          setProgress(n);
+        if (d.configured) {
           setCloud(true);
-        } else setProgress(fallback);
+          if (d.records?.length) {
+            let n = initial();
+            d.records.forEach(
+              (r) =>
+                n[r.participant] &&
+                n[r.participant][r.day] &&
+                (n[r.participant][r.day] = { vocab: r.vocab, speech: r.speech }),
+            );
+            setProgress(n);
+          } else {
+            setProgress(fallback);
+          }
+        } else {
+          setProgress(fallback);
+        }
       } catch {
         setProgress(fallback);
       }
