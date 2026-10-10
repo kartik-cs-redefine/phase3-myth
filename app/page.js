@@ -1,141 +1,471 @@
-'use client';
-
-import { useEffect, useMemo, useState } from 'react';
-import { Award, Check, CheckCircle2, ChevronDown, CircleHelp, Clock3, Copy, Crown, Flame, LockKeyhole, Medal, ShieldCheck, Sparkles, Trophy, X } from 'lucide-react';
-
-const PEOPLE = [
-  'Kartik Kumar', 'Tanmay Awasthi', 'Kanika Dwivedi', 'Krish Chaddha',
-  'Krishna Kumar Gaur', 'Avantika Yadav', 'Kshitij Rajput'
-];
-const STORE = 'myth-phase-3-progress';
-const dayNow = Math.min(30, Math.max(1, new Date().getDate()));
-
-const emptyProgress = () => Object.fromEntries(PEOPLE.map(person => [person, Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { vocab: false, speech: false }]))]));
-const initials = name => name.split(' ').map(s => s[0]).join('').slice(0, 2);
-
-function dayState(task, day) {
-  const count = Number(task.vocab) + Number(task.speech);
-  if (count === 2) return { label: 'Completed', tone: 'complete' };
-  if (count === 1) return { label: 'Partial', tone: 'partial' };
-  if (day < dayNow - 1) return { label: 'Missed', tone: 'missed' };
-  return { label: 'Pending', tone: 'pending' };
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Check,
+  CheckCircle2,
+  Cloud,
+  Copy,
+  Flame,
+  LockKeyhole,
+  Medal,
+  Moon,
+  Send,
+  Sparkles,
+  Sun,
+  Trophy,
+  X,
+} from "lucide-react";
+import TechText from "../components/TechText";
+import SideRays from "../components/SideRays";
+import AeroShards from "../components/AeroShards";
+const P = [
+    "Kartik Kumar",
+    "Tanmay Awasthi",
+    "Kanika Dwivedi",
+    "Krish Chaddha",
+    "Krishna Kumar Gaur",
+    "Avantika Yadav",
+    "Kshitij Rajput",
+  ],
+  K = "myth-phase-3-progress",
+  now = Math.min(30, Math.max(1, new Date().getDate())),
+  initial = () =>
+    Object.fromEntries(
+      P.map((p) => [
+        p,
+        Object.fromEntries(
+          Array.from({ length: 30 }, (_, i) => [
+            i + 1,
+            { vocab: false, speech: false },
+          ]),
+        ),
+      ]),
+    ),
+  ini = (n) =>
+    n
+      .split(" ")
+      .map((x) => x[0])
+      .join("")
+      .slice(0, 2),
+  mono = "font-mono tabular-nums";
+function streak(d) {
+  let a = 0,
+    b = 0;
+  for (let i = 1; i < 31; i++) {
+    if (d[i].vocab && d[i].speech) {
+      b++;
+      a = Math.max(a, b);
+    } else b = 0;
+  }
+  return a;
 }
-
-function longestStreak(days) {
-  let best = 0, active = 0;
-  for (let d = 1; d <= 30; d++) { if (days[d].vocab && days[d].speech) { active++; best = Math.max(best, active); } else active = 0; }
-  return best;
+function status(x, d) {
+  return x.vocab && x.speech
+    ? "done"
+    : x.vocab || x.speech
+      ? "partial"
+      : d < now - 1
+        ? "missed"
+        : "pending";
 }
-
 export default function Home() {
-  const [progress, setProgress] = useState(emptyProgress);
-  const [admin, setAdmin] = useState(false);
-  const [modal, setModal] = useState(false);
-  const [pin, setPin] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [activeFilter, setActiveFilter] = useState('All');
-  const [isCloud, setIsCloud] = useState(false);
-  const [saveState, setSaveState] = useState('Loading tracker…');
-  const [copied, setCopied] = useState(false);
-
+  const [progress, setProgress] = useState(initial),
+    [admin, setAdmin] = useState(false),
+    [modal, setModal] = useState(false),
+    [pin, setPin] = useState(""),
+    [error, setError] = useState(""),
+    [filter, setFilter] = useState("all"),
+    [cloud, setCloud] = useState(false),
+    [theme, setTheme] = useState("dark"),
+    [toastState, setToast] = useState(),
+    [hasEntered, setHasEntered] = useState(false),
+    ref = useRef();
+  const toast = (m, t = "ok") => {
+    setToast({ m, t });
+    setTimeout(() => setToast(), 2200);
+  };
   useEffect(() => {
-    const load = async () => {
-      const fallback = JSON.parse(localStorage.getItem(STORE) || 'null') || emptyProgress();
+    let t = localStorage.getItem("myth-theme") || "dark";
+    setTheme(t);
+    document.documentElement.classList.toggle("dark", t === "dark");
+    (async () => {
+      let fallback = JSON.parse(localStorage.getItem(K) || "null") || initial();
       try {
-        const res = await fetch('/api/progress', { cache: 'no-store' });
-        const data = await res.json();
-        if (data.configured && data.records?.length) {
-          const next = emptyProgress();
-          data.records.forEach(r => { if (next[r.participant]?.[r.day]) next[r.participant][r.day] = { vocab: r.vocab, speech: r.speech }; });
-          setProgress(next); setIsCloud(true); setSaveState('Synced live');
-        } else { setProgress(fallback); setIsCloud(false); setSaveState('Saved on this device'); }
-      } catch { setProgress(fallback); setSaveState('Saved on this device'); }
-    };
-    load();
+        let d = await (await fetch("/api/progress")).json();
+        if (d.configured && d.records?.length) {
+          let n = initial();
+          d.records.forEach(
+            (r) =>
+              n[r.participant] &&
+              n[r.participant][r.day] &&
+              (n[r.participant][r.day] = { vocab: r.vocab, speech: r.speech }),
+          );
+          setProgress(n);
+          setCloud(true);
+        } else setProgress(fallback);
+      } catch {
+        setProgress(fallback);
+      }
+    })();
   }, []);
-
-  const stats = useMemo(() => {
-    const rows = PEOPLE.map(name => {
-      const days = progress[name];
-      const complete = Object.values(days).filter(x => x.vocab && x.speech).length;
-      const totalTasks = Object.values(days).reduce((n, x) => n + Number(x.vocab) + Number(x.speech), 0);
-      const streak = longestStreak(days);
-      return { name, complete, tasks: totalTasks, streak, score: complete * 100 + streak * 10 + totalTasks };
-    }).sort((a, b) => b.score - a.score || b.complete - a.complete);
-    const allTasks = PEOPLE.length * 30 * 2;
-    const doneTasks = rows.reduce((n, p) => n + p.tasks, 0);
-    return { rows, doneTasks, consistency: Math.round(doneTasks / allTasks * 100), completeDays: rows.reduce((n, p) => n + p.complete, 0) };
+  useEffect(() => setHasEntered(localStorage.getItem("myth_entered") === "true"), []);
+  useEffect(() => {
+    if (!modal) return;
+    let f = () => ref.current?.querySelectorAll("button,input") || [],
+      h = (e) => {
+        if (e.key === "Escape") setModal(false);
+        if (e.key === "Tab") {
+          let x = f(),
+            a = x[0],
+            z = x[x.length - 1];
+          if (e.shiftKey && document.activeElement === a) {
+            e.preventDefault();
+            z.focus();
+          }
+          if (!e.shiftKey && document.activeElement === z) {
+            e.preventDefault();
+            a.focus();
+          }
+        }
+      };
+    addEventListener("keydown", h);
+    setTimeout(() => f()[1]?.focus(), 1);
+    return () => removeEventListener("keydown", h);
+  }, [modal]);
+  let stats = useMemo(() => {
+    let rows = P.map((name) => {
+        let d = progress[name],
+          done = Object.values(d).filter((x) => x.vocab && x.speech).length,
+          tasks = Object.values(d).reduce(
+            (a, x) => a + +x.vocab + +x.speech,
+            0,
+          ),
+          s = streak(d);
+        return { name, done, tasks, s, score: done * 100 + s * 10 + tasks };
+      }).sort((a, b) => b.score - a.score),
+      tasks = rows.reduce((a, x) => a + x.tasks, 0);
+    return { rows, tasks, cons: Math.round((tasks / (P.length * 60)) * 100) };
   }, [progress]);
-
-  const visibleDays = useMemo(() => {
-    if (activeFilter === 'Backlogs') return Array.from({ length: Math.max(dayNow - 1, 0) }, (_, i) => i + 1);
-    if (activeFilter === 'All') return Array.from({ length: 30 }, (_, i) => i + 1);
-    const week = Number(activeFilter.replace('Week ', ''));
-    return Array.from({ length: 7 }, (_, i) => (week - 1) * 7 + i + 1).filter(d => d <= 30);
-  }, [activeFilter]);
-
-  async function toggle(person, day, task) {
-    if (!admin) return;
-    const nextTask = { ...progress[person][day], [task]: !progress[person][day][task] };
-    const next = { ...progress, [person]: { ...progress[person], [day]: nextTask } };
-    setProgress(next); localStorage.setItem(STORE, JSON.stringify(next)); setSaveState('Saving…');
-    if (isCloud) {
-      try { const res = await fetch('/api/progress', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ participant: person, day, ...nextTask }) }); if (!res.ok) throw new Error(); setSaveState('Synced live'); }
-      catch { setSaveState('Saved locally — cloud retry needed'); }
-    } else setSaveState('Saved on this device');
+  let days =
+    filter === "all"
+      ? Array.from({ length: 30 }, (_, i) => i + 1)
+      : filter === "back"
+        ? Array.from({ length: Math.max(0, now - 1) }, (_, i) => i + 1)
+        : Array.from({ length: 7 }, (_, i) => (+filter - 1) * 7 + i + 1).filter(
+            (x) => x < 31,
+          );
+  async function toggle(p, d, k) {
+    if (!admin) return toast("Admin mode required to edit", "lock");
+    let task = { ...progress[p][d], [k]: !progress[p][d] },
+      n = { ...progress, [p]: { ...progress[p], [d]: task } };
+    setProgress(n);
+    localStorage.setItem(K, JSON.stringify(n));
+    if (cloud)
+      try {
+        let r = await fetch("/api/progress", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ participant: p, day: d, ...task }),
+        });
+        if (!r.ok) throw 0;
+        toast("Saved to Cloud");
+      } catch {
+        toast("Saved on this device", "lock");
+      }
+    else toast("Saved on this device");
   }
-
   async function unlock(e) {
-    e.preventDefault(); setPinError('');
-    try { const res = await fetch('/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) }); const { valid } = await res.json(); if (valid) { setAdmin(true); setModal(false); setPin(''); } else setPinError('That PIN is not correct.'); }
-    catch { setPinError('Could not verify the PIN.'); }
+    e.preventDefault();
+    let d = await (
+      await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin }),
+      })
+    ).json();
+    if (d.valid) {
+      setAdmin(true);
+      setModal(false);
+      toast("Admin mode unlocked");
+    } else {
+      setError("Incorrect PIN. Try again.");
+      ref.current.classList.add("shake");
+      setTimeout(() => ref.current?.classList.remove("shake"), 430);
+    }
   }
-
-  function copyLeaderboard() {
-    const text = `🏹 TEAM MYTH — Phase 3 Leaderboard\nDay ${dayNow} • ${stats.consistency}% Team Consistency\n\n${stats.rows.slice(0, 3).map((p, i) => `${['🥇', '🥈', '🥉'][i]} ${p.name} — ${p.complete} completed days | ${p.streak}-day streak`).join('\n')}\n\nKeep the energy high! जय बजरंगबली 🔥`;
-    navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800);
+  function copy() {
+    navigator.clipboard.writeText(
+      `🏹 TEAM MYTH — PHASE 3\nDay ${now} of 30 · ${stats.cons}% consistency\n\n${stats.rows
+        .slice(0, 3)
+        .map(
+          (x, i) =>
+            `${["🥇", "🥈", "🥉"][i]} ${x.name} — ${x.done} days · ${x.s}-day streak`,
+        )
+        .join("\n")}`,
+    );
+    toast("WhatsApp report copied");
   }
-
-  return <main className="min-h-screen overflow-hidden">
-    <div className="aurora" /><div className="grid-glow" />
-    <section className="relative mx-auto max-w-[1600px] px-4 pb-12 pt-5 sm:px-8 sm:pt-8">
-      <header className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="hanuman-mark"><Flame size={23} fill="currentColor" /></div>
-          <div><p className="eyebrow">ENGLISH INITIATIVE</p><h1>TEAM MYTH <span>— PHASE 3</span></h1></div>
+  let setT = () => {
+    let x = theme === "dark" ? "light" : "dark";
+    setTheme(x);
+    localStorage.setItem("myth-theme", x);
+    document.documentElement.classList.toggle("dark", x === "dark");
+  };
+  const enterDashboard = () => { localStorage.setItem("myth_entered", "true"); setHasEntered(true); };
+  if (!hasEntered) return <main className="landing"><AeroShards /><div className="landing-content"><p className="landing-badge">✦ TEAM MYTH PRESENTS</p><h1>MYTH <span>— PHASE 3</span></h1><p className="landing-subtitle">Speak with Conviction. Build Consistency. One Day at a Time.</p><button onClick={enterDashboard}>Get Started <b>→</b></button></div><small>30-Day Speaking &amp; Technical Communication Challenge · 7 Participants</small></main>;
+  return (
+    <main className="app">
+      <SideRays />
+      <nav>
+        <div className="brand">
+          <b>M</b>
+          <div>
+            <strong>TEAM MYTH</strong>
+            <span>● Live Phase 3</span>
+          </div>
         </div>
-        <button className={admin ? 'admin-button unlocked' : 'admin-button'} onClick={() => admin ? setAdmin(false) : setModal(true)}>{admin ? <><ShieldCheck size={16}/> Admin active</> : <><LockKeyhole size={16}/> Admin unlock</>}</button>
-      </header>
-
-      <div className="hero-line"><span className="live-dot" /> <span>{isCloud ? 'LIVE CLOUD TRACKER' : 'DEVICE-SAVED TRACKER'}</span><span className="hero-separator">•</span><span>{saveState}</span></div>
-
-      <section className="stats-grid">
-        <Stat icon={<Clock3/>} label="Current phase day" value={`Day ${dayNow}`} sub="30-day speaking sprint" tint="orange" />
-        <Stat icon={<CheckCircle2/>} label="Completed days" value={stats.completeDays} sub={`of ${PEOPLE.length * 30} possible`} tint="teal" />
-        <Stat icon={<Award/>} label="Team consistency" value={`${stats.consistency}%`} sub={`${stats.doneTasks} task check-ins`} tint="gold" />
-        <Stat icon={<Flame/>} label="Best active streak" value={`${stats.rows[0]?.streak || 0} days`} sub={stats.rows[0]?.name || 'No activity yet'} tint="pink" />
-      </section>
-
-      <section className="podium-section">
-        <div className="section-heading"><div><p className="eyebrow">LIVE RANKINGS</p><h2>Momentum leaders <Sparkles size={18}/></h2></div><p>Completed days · streak · consistency</p></div>
-        <div className="podium-grid">
-          {[1, 0, 2].map((rank) => { const p = stats.rows[rank]; const medals = [<Crown key="c"/>, <Medal key="s"/>, <Award key="b"/>]; return <article className={`podium-card rank-${rank + 1}`} key={rank}>
-            <div className="rank-medal">{medals[rank]}</div><div className="avatar">{initials(p.name)}</div><div className="podium-info"><span className="rank-label">{['1ST PLACE', '2ND PLACE', '3RD PLACE'][rank]}</span><h3>{p.name}</h3><div><b>{p.complete}</b> days <i/> <b><Flame size={13}/> {p.streak}</b> streak</div></div><div className="score">{Math.round(p.tasks / 60 * 100)}<small>%</small></div>
-          </article>; })}
+        <div className="nav">
+          <i className={mono}>
+            Day {now} <em>of 30</em>
+          </i>
+          <button onClick={setT} aria-label="Theme">
+            {theme === "dark" ? <Sun /> : <Moon />}
+          </button>
+          <button
+            className={admin ? "on" : ""}
+            onClick={() => (admin ? setAdmin(false) : setModal(true))}
+          >
+            <LockKeyhole /> {admin ? "Editing on" : "Admin unlock"}
+          </button>
         </div>
+      </nav>
+      <section className="hero">
+        <p>
+          <Sparkles /> ENGLISH INITIATIVE · PHASE 3
+        </p>
+        <h1>
+          Build momentum.
+          <br />
+          <span>One day at a time.</span>
+        </h1>
+        <small>
+          <Cloud /> {cloud ? "Cloud sync active" : "Device-saved workspace"}
+        </small>
       </section>
-
-      <section className="tracker-shell">
-        <div className="tracker-head"><div><p className="eyebrow">DAILY CHECK-IN MATRIX</p><h2>Progress board</h2><p className="muted">Tap each task only when it’s actually done.</p></div><button className="copy-button" onClick={copyLeaderboard}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? 'Copied!' : 'Copy leaderboard'}</button></div>
-        <div className="filters">{['All', 'Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Backlogs'].map(filter => <button onClick={() => setActiveFilter(filter)} className={activeFilter === filter ? 'filter active' : 'filter'} key={filter}>{filter === 'Backlogs' && <CircleHelp size={13}/>} {filter}</button>)}</div>
-        <div className="legend"><span><b className="legend-dot done"/> Completed</span><span><b className="legend-dot partial"/> Partial</span><span><b className="legend-dot pending"/> Pending</span><span><b className="legend-dot missed"/> Missed</span>{admin && <em><ShieldCheck size={14}/> Editing enabled</em>}</div>
-        <div className="table-scroll"><table><thead><tr><th className="person-col">Member</th>{visibleDays.map(day => <th key={day} className={day === dayNow ? 'today' : ''}><span>DAY</span>{day}</th>)}<th className="summary-col">Completion</th></tr></thead>
-          <tbody>{PEOPLE.map(person => { const row = stats.rows.find(x => x.name === person); return <tr key={person}><td className="person-cell"><div className="small-avatar">{initials(person)}</div><div><b>{person}</b><span>{person === 'Kartik Kumar' ? 'Team Lead' : 'Member'}</span></div></td>{visibleDays.map(day => { const task = progress[person][day], state = dayState(task, day); return <td key={day} className="task-cell"><div className={`day-tile ${state.tone}`} title={`Day ${day}: ${state.label}`}><button aria-label={`${person}, day ${day}, vocabulary`} disabled={!admin} onClick={() => toggle(person, day, 'vocab')} className={task.vocab ? 'tick checked vocab' : 'tick'}><span>V</span>{task.vocab && <Check size={12}/>}</button><button aria-label={`${person}, day ${day}, speech`} disabled={!admin} onClick={() => toggle(person, day, 'speech')} className={task.speech ? 'tick checked speech' : 'tick'}><span>S</span>{task.speech && <Check size={12}/>}</button></div></td>})}<td className="completion"><b>{row.complete}/30</b><div><i style={{ width: `${row.complete / 30 * 100}%` }} /></div></td></tr>; })}</tbody></table></div>
-        <div className="table-note"><span>V <b>Vocabulary (5–7 words)</b></span><span>S <b>Speech (audio/video, 2–10 min)</b></span><span>🟡 Pending becomes missed after the one-day grace window.</span></div>
+      <section className="bento">
+        <Card
+          title="Team consistency"
+          value={`${stats.cons}%`}
+          sub="Across every Vocab + Speech check-in"
+          ring={stats.cons}
+        />
+        <Card
+          title="Total submissions"
+          value={`${stats.tasks}`}
+          sub={`of ${P.length * 60} team targets`}
+        />
+        <article>
+          <label>
+            Active pace <Flame />
+          </label>
+          <div className="person">
+            <b>{ini(stats.rows[0].name)}</b>
+            <strong>
+              {stats.rows[0].name}
+              <small>Leading the rhythm</small>
+            </strong>
+          </div>
+          <p className="orange">
+            <Flame /> <i className={mono}>{stats.rows[0].s} day streak</i>
+          </p>
+        </article>
+        <article className="share">
+          <Send />
+          <div>
+            <strong>Celebrate the wins</strong>
+            <p>Send today’s standings to the group.</p>
+          </div>
+          <button onClick={copy}>Copy WhatsApp report</button>
+        </article>
       </section>
-    </section>
-    {modal && <div className="modal-backdrop" onMouseDown={() => setModal(false)}><form className="pin-modal" onSubmit={unlock} onMouseDown={e => e.stopPropagation()}><button className="close" type="button" onClick={() => setModal(false)}><X size={19}/></button><div className="lock-orb"><LockKeyhole size={27}/></div><p className="eyebrow">RESTRICTED ACCESS</p><h2>Admin unlock</h2><p>Enter Kartik’s PIN to manage daily check-ins.</p><input autoFocus value={pin} onChange={e => setPin(e.target.value)} inputMode="numeric" type="password" placeholder="Enter PIN" /><small className="pin-error">{pinError}</small><button className="unlock-submit">Unlock editor <ChevronDown size={17}/></button></form></div>}
-  </main>;
+      <Title text="Top performers" />
+      <section className="podium">
+        {stats.rows.slice(0, 3).map((x, i) => (
+          <article className={`place p${i + 1}`} key={x.name}>
+            <Medal />
+            <small>
+              0{i + 1} · {["GOLD", "SILVER", "BRONZE"][i]}
+            </small>
+            <div className="person">
+              <b>{ini(x.name)}</b>
+              <strong>
+                {x.name}
+                <small>{x.done} completed days</small>
+              </strong>
+            </div>
+            <footer>
+              <i className={mono}>{x.score} score</i>
+              <span>
+                <Flame /> {x.s} streak
+              </span>
+            </footer>
+          </article>
+        ))}
+      </section>
+      <section className="matrix">
+        <header>
+          <div>
+            <p>30-DAY OPERATING SYSTEM</p>
+            <h2>Daily progress matrix</h2>
+            <small>
+              Vocabulary and speaking practice, with the full team in view.
+            </small>
+          </div>
+          <b>{admin ? "Editing enabled" : "Viewer mode"}</b>
+        </header>
+        <div className="tabs">
+          {[
+            ["all", "All Days"],
+            ["1", "Week 1 · D1–D7"],
+            ["2", "Week 2 · D8–D14"],
+            ["3", "Week 3 · D15–D21"],
+            ["4", "Week 4 · D22–D30"],
+            ["back", "Pending Backlogs"],
+          ].map((x) => (
+            <button
+              className={filter === x[0] ? "active" : ""}
+              onClick={() => setFilter(x[0])}
+            >
+              {x[1]}
+            </button>
+          ))}
+        </div>
+        <div className="legend">
+          ● Complete　● Partial　● Pending　● Missed{" "}
+          <span>V Vocab · S Speech</span>
+        </div>
+        <div className="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Participant</th>
+                {days.map((d) => (
+                  <th className={d === now ? "today" : ""}>
+                    Day
+                    <br />
+                    {d}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {P.map((p) => {
+                let r = stats.rows.find((x) => x.name === p);
+                return (
+                  <tr>
+                    <td>
+                      <b>{ini(p)}</b>
+                      <div>
+                        <strong>{p}</strong>
+                        <small>
+                          {p === "Kartik Kumar" ? "Team lead" : "Member"} ·{" "}
+                          <i className={mono}>{r.score} pts</i>
+                        </small>
+                      </div>
+                    </td>
+                    {days.map((d) => (
+                      <td>
+                        <div className={status(progress[p][d], d)}>
+                          <Chip
+                            x="V"
+                            v={progress[p][d].vocab}
+                            f={() => toggle(p, d, "vocab")}
+                          />
+                          <Chip
+                            x="S"
+                            v={progress[p][d].speech}
+                            f={() => toggle(p, d, "speech")}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <footer>
+          V Vocabulary: 5–7 words　 ·　 S Speech: 2–10 min audio/video
+        </footer>
+      </section>
+      {toastState && (
+        <aside className={toastState.t}>
+          {toastState.t === "lock" ? <LockKeyhole /> : <CheckCircle2 />}
+          {toastState.m}
+        </aside>
+      )}
+      {modal && (
+        <div className="back" onMouseDown={() => setModal(false)}>
+          <form
+            ref={ref}
+            onMouseDown={(e) => e.stopPropagation()}
+            onSubmit={unlock}
+          >
+            <button
+              className="close"
+              type="button"
+              onClick={() => setModal(false)}
+            >
+              <X />
+            </button>
+            <LockKeyhole />
+            <p>RESTRICTED WORKSPACE</p>
+            <h2>Admin unlock</h2>
+            <small>Enter the team PIN to update daily submissions.</small>
+            <input
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="••••"
+              type="password"
+            />
+            <em>{error}</em>
+            <button>Unlock workspace</button>
+          </form>
+        </div>
+      )}
+      <section className="myth-tech-footer" aria-label="Team MYTH interactive banner">
+        <TechText text="MYTH" accentColor="#f59e0b" />
+      </section>
+    </main>
+  );
 }
-
-function Stat({ icon, label, value, sub, tint }) { return <article className={`stat-card ${tint}`}><div className="stat-icon">{icon}</div><div><p>{label}</p><h2>{value}</h2><span>{sub}</span></div></article>; }
+function Chip({ x, v, f }) {
+  return (
+    <button className={v ? "checked" : ""} onClick={f}>
+      {v ? <Check /> : x}
+    </button>
+  );
+}
+function Card({ title, value, sub, ring }) {
+  return (
+    <article>
+      <label>{title}</label>
+      <strong className={mono}>{value}</strong>
+      {ring !== undefined && (
+        <div className="ring text-zinc-900 dark:text-zinc-100 font-bold font-mono text-sm md:text-base" style={{ "--p": ring * 3.6 + "deg" }}>
+          <span>{ring}%</span>
+        </div>
+      )}
+      <p>{sub}</p>
+    </article>
+  );
+}
+function Title({ text }) {
+  return (
+    <div className="title">
+      <p>LIVE LEADERBOARD</p>
+      <h2>{text}</h2>
+    </div>
+  );
+}
