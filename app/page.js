@@ -162,8 +162,9 @@ export default function Home() {
           );
   async function toggle(p, d, k) {
     if (!admin) return toast("Admin mode required to edit", "lock");
-    let task = { ...progress[p][d], [k]: !progress[p][d] },
-      n = { ...progress, [p]: { ...progress[p], [d]: task } };
+    let currentVal = Boolean(progress[p]?.[d]?.[k]);
+    let task = { ...progress[p][d], [k]: !currentVal };
+    let n = { ...progress, [p]: { ...progress[p], [d]: task } };
     setProgress(n);
     localStorage.setItem(K, JSON.stringify(n));
     if (cloud)
