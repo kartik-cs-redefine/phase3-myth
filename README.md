@@ -31,4 +31,4 @@ ADMIN_PIN=your-secret-pin
 2. Add the three environment variables above in **Project Settings → Environment Variables**.
 3. Deploy. The supplied API routes automatically use Supabase when configured.
 
-The default admin PIN (`1080`) is for local testing only—set `ADMIN_PIN` before a public deployment.
+The default admin PIN (`1080`) is available only in local development. Set `ADMIN_PIN` before a public deployment; production requests are rejected until it is configured.
